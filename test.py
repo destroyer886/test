@@ -81,4 +81,5 @@ if __name__ == "__main__":
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
-    print("🚀updated Running AI RTSP processing...")
+    while True:
+        print("🚀updated Running AI RTSP processing...")
