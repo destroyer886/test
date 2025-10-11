@@ -5,7 +5,7 @@ import shutil
 
 LOCK_FILE = "/tmp/ai_rtsp.pid"
 REPO_URL = "https://github.com/destroyer886/test.git"
-LOCAL_DIR = "../"
+LOCAL_DIR = "/home/kali/Desktop/auto_update"
 BRANCH = "main"
 
 def single_instance_lock():
