@@ -3,6 +3,7 @@ import sys
 import subprocess
 import time
 import fcntl
+import socket
 
 LOCK_FILE = "/tmp/ai_rtsp.lock"
 REPO_URL = "https://github.com/destroyer886/test.git"
@@ -23,8 +24,23 @@ def single_instance_lock():
         sys.exit(0)
 
 
+def internet_available(host="8.8.8.8", port=53, timeout=5, retries=3):
+    """Check if internet is available (with retries)."""
+    for attempt in range(retries):
+        try:
+            socket.setdefaulttimeout(timeout)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, port))
+            s.close()
+            return True
+        except Exception:
+            print(f"🌐 Internet check failed (attempt {attempt + 1}/{retries})...")
+            time.sleep(2)
+    return False
+
+
 def get_commit_hash():
-    """Returns the current git commit hash, or None if not a git repo."""
+    """Get current commit hash (None if not a git repo)."""
     git_dir = os.path.join(LOCAL_DIR, ".git")
     if not os.path.exists(git_dir):
         return None
@@ -34,56 +50,86 @@ def get_commit_hash():
             cwd=LOCAL_DIR,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            timeout=10
         )
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except subprocess.SubprocessError:
         return None
 
 
 def update_repo():
-    """Pull latest code and return True if updated, else False."""
+    """Update repo if possible; handle weak or no internet gracefully."""
+    if not internet_available():
+        print("🌐 No or weak internet connection. Running existing code...")
+        return False
+
     old_commit = get_commit_hash()
     if not old_commit:
-        print("📦 Cloning repository...")
-        subprocess.run(["git", "clone", REPO_URL, LOCAL_DIR], check=True)
-        return True
+        print("📦 No git repo found — trying to clone...")
+        try:
+            subprocess.run(
+                ["git", "clone", REPO_URL, LOCAL_DIR],
+                check=True,
+                timeout=60
+            )
+            return True
+        except subprocess.SubprocessError:
+            print("❌ Clone failed (weak or no internet). Running existing code.")
+            return False
 
-    print("🔄 Checking for updates...")
-    subprocess.run(["git", "fetch", "origin", BRANCH], cwd=LOCAL_DIR, check=True)
-    new_commit = subprocess.run(
-        ["git", "rev-parse", f"origin/{BRANCH}"],
-        cwd=LOCAL_DIR,
-        capture_output=True,
-        text=True,
-        check=True
-    ).stdout.strip()
+    try:
+        print("🔄 Checking for updates (may take a few seconds)...")
+        subprocess.run(
+            ["git", "fetch", "origin", BRANCH],
+            cwd=LOCAL_DIR,
+            check=True,
+            timeout=30
+        )
 
-    if new_commit != old_commit:
-        print("✅ Update found! Pulling latest code...")
-        subprocess.run(["git", "reset", "--hard", f"origin/{BRANCH}"], cwd=LOCAL_DIR, check=True)
-        return True
-    else:
-        print("✅ Code is up to date.")
+        new_commit = subprocess.run(
+            ["git", "rev-parse", f"origin/{BRANCH}"],
+            cwd=LOCAL_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        ).stdout.strip()
+
+        if new_commit != old_commit:
+            print("✅ Update found! Pulling latest code...")
+            subprocess.run(
+                ["git", "reset", "--hard", f"origin/{BRANCH}"],
+                cwd=LOCAL_DIR,
+                check=True,
+                timeout=20
+            )
+            return True
+        else:
+            print("✅ Code is up to date.")
+            return False
+
+    except subprocess.TimeoutExpired:
+        print("⏱ Git command timed out — slow internet. Running current code.")
+        return False
+    except subprocess.SubprocessError as e:
+        print(f"❌ Git update failed: {e}. Running existing code.")
         return False
 
 
 if __name__ == "__main__":
     single_instance_lock()
-    updated = update_repo()
 
+    updated = update_repo()
     if updated:
         print("♻️ Restarting with new code...")
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
-    print("🚀 Running main logic here...")
-    # ---------------------------
-    # Your actual code below
-    # ---------------------------
+    print("🚀 Running AI RTSP logic...")
     try:
         while True:
-            print("🧠 AI RTSP running...")
-            time.sleep(3)
+            print("🧩 Processing RTSP stream...")
+            time.sleep(10)
     except KeyboardInterrupt:
         print("👋 Exiting cleanly.")
