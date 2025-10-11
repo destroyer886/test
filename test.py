@@ -1,40 +1,47 @@
 import os
 import sys
 import subprocess
-import fcntl
 
-LOCK_FILE = "/tmp/ai_rtsp.lock"
+LOCK_FILE = "/tmp/ai_rtsp.pid"
+REPO_URL = "https://github.com/destroyer886/test.git"
+LOCAL_DIR = "../"  # temporary local folder for the repo
+BRANCH = "main"
 
 def single_instance_lock():
     """Prevent multiple instances of this script from running."""
-    lock_fd = open(LOCK_FILE, "w")
-    try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        lock_fd.write(str(os.getpid()))
-        lock_fd.flush()
-        return lock_fd  # keep lock open while running
-    except IOError:
-        print("⚠️ Another instance is already running. Exiting...")
-        sys.exit(0)
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE, "r") as f:
+            pid = f.read().strip()
+            if pid and pid.isdigit():
+                try:
+                    os.kill(int(pid), 0)
+                    print("⚠️ Another instance is already running. Exiting...")
+                    sys.exit(0)
+                except ProcessLookupError:
+                    pass  # PID not running, safe to proceed
+
+    # Write current PID to lock file
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
 
 def update_code():
-    repo_dir = "/home/jetson/yourrepo"  # path to your repo
-    branch = "main"
-    try:
-        os.chdir(repo_dir)
-        print("🔄 Fetching latest code from GitHub...")
+    """Clone or pull the repo from GitHub."""
+    if not os.path.exists(LOCAL_DIR):
+        print("📦 Cloning repository from GitHub...")
+        subprocess.run(["git", "clone", REPO_URL, LOCAL_DIR], check=True)
+    else:
+        print("🔄 Pulling latest code from GitHub...")
+        os.chdir(LOCAL_DIR)
         subprocess.run(["git", "fetch", "--all"], check=True)
-        subprocess.run(["git", "reset", "--hard", f"origin/{branch}"], check=True)
+        subprocess.run(["git", "reset", "--hard", f"origin/{BRANCH}"], check=True)
         subprocess.run(["git", "pull"], check=True)
-        print("✅ Code updated successfully.\n")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Git update failed: {e}")
-        return False
+    
+    print("✅ Code is up to date.\n")
+    return True
 
 if __name__ == "__main__":
     # 🔐 Acquire lock to ensure single instance
-    lock_fd = single_instance_lock()
+    single_instance_lock()
 
     # 🔄 Update code
     updated = update_code()
@@ -47,5 +54,3 @@ if __name__ == "__main__":
     # 🧠 Main script logic (after update)
     print("🚀 Running AI RTSP processing...")
     # your ai_rtsp code here...
-
-    # ⚠️ Lock will automatically release on exit
