@@ -5,7 +5,7 @@ import shutil
 
 LOCK_FILE = "/tmp/ai_rtsp.pid"
 REPO_URL = "https://github.com/destroyer886/test.git"
-LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))  # current folder
+LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 BRANCH = "main"
 
 def single_instance_lock():
@@ -18,7 +18,7 @@ def single_instance_lock():
                     print("⚠️ Another instance is already running. Exiting...")
                     sys.exit(0)
                 except ProcessLookupError:
-                    pass
+                    pass  # stale PID, safe to proceed
     with open(LOCK_FILE, "w") as f:
         f.write(str(os.getpid()))
 
@@ -59,6 +59,9 @@ if __name__ == "__main__":
     updated = update_code()
 
     if updated:
+        # Remove lock file BEFORE restarting
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
         print("♻️ Restarting with updated code...")
         python = sys.executable
         os.execl(python, python, *sys.argv)
