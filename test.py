@@ -18,12 +18,11 @@ def single_instance_lock():
                     print("⚠️ Another instance is already running. Exiting...")
                     sys.exit(0)
                 except ProcessLookupError:
-                    pass  # stale PID, safe to proceed
+                    pass
     with open(LOCK_FILE, "w") as f:
         f.write(str(os.getpid()))
 
 def clear_folder(folder):
-    """Delete all files/folders in folder except this script."""
     for item in os.listdir(folder):
         item_path = os.path.join(folder, item)
         if item_path == os.path.abspath(__file__):
@@ -33,35 +32,51 @@ def clear_folder(folder):
         else:
             os.remove(item_path)
 
+def get_current_commit():
+    git_folder = os.path.join(LOCAL_DIR, ".git")
+    if os.path.exists(git_folder):
+        os.chdir(LOCAL_DIR)
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True
+        )
+        return result.stdout.strip()
+    return None
+
 def update_code():
+    """Pull latest changes or clone if folder is empty."""
+    old_commit = get_current_commit()
     git_folder = os.path.join(LOCAL_DIR, ".git")
 
     if os.path.exists(git_folder):
-        # Pull latest changes
         print("🔄 Pulling latest code from GitHub...")
         os.chdir(LOCAL_DIR)
         subprocess.run(["git", "fetch", "--all"], check=True)
         subprocess.run(["git", "reset", "--hard", f"origin/{BRANCH}"], check=True)
         subprocess.run(["git", "pull"], check=True)
     else:
-        # Clean folder except the script
         print("🗑️ Clearing folder before clone...")
         clear_folder(LOCAL_DIR)
-        # Clone into the same folder
         print("📦 Cloning repository into current folder...")
         subprocess.run(["git", "clone", REPO_URL, LOCAL_DIR], check=True)
 
-    print("✅ Code is up to date.\n")
-    return True
+    new_commit = get_current_commit()
+    if old_commit != new_commit:
+        print("✅ Code updated! New commit:", new_commit)
+        return True  # restart needed
+    else:
+        print("✅ Code is up to date. No restart needed.")
+        return False  # no restart
 
 if __name__ == "__main__":
     single_instance_lock()
     updated = update_code()
 
+    # Remove lock file before restarting
+    if os.path.exists(LOCK_FILE):
+        os.remove(LOCK_FILE)
+
     if updated:
-        # Remove lock file BEFORE restarting
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
         print("♻️ Restarting with updated code...")
         python = sys.executable
         os.execl(python, python, *sys.argv)
