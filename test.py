@@ -129,7 +129,7 @@ if __name__ == "__main__":
     print("🚀 Running AI RTSP logic...")
     try:
         while True:
-            print("🧩 Processing RTSP stream...")
-            time.sleep(10)
+            print("🧩 Processing RTSP stream... updated")
+            time.sleep(3)
     except KeyboardInterrupt:
         print("👋 Exiting cleanly.")
